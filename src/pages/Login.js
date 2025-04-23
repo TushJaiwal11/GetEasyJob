@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import axiosInstance from '../components/axiosInstance';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
+  const navigate = useNavigate()
 
   // Remove any old token when login page loads
   useEffect(() => {
     localStorage.removeItem('token');
-    
+
   }, []);
 
   const handleChange = (e) => {
@@ -30,7 +32,7 @@ const Login = () => {
       toast.success('Login successful! Redirecting...');
 
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        navigate('/dashboard')
       }, 2000);
     } catch (error) {
       const errMsg = error.response?.data || error.message;

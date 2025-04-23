@@ -48,7 +48,7 @@ const Users = () => {
     const handleUpdate = (user) => {
         setSelectedUser({ ...user });
         setShowModal(true);
-    }; 
+    };
 
     const handleDelete = async (userId) => {
         if (window.confirm("Are you sure you want to de-activate this user?")) {

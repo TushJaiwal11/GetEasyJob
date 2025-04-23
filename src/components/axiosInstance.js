@@ -1,5 +1,6 @@
 // src/components/axiosInstance.js
 import axios from 'axios';
+import { getNavigate } from './navigateServices';
 
 const axiosInstance = axios.create({
   baseURL: 'http://localhost:9191', // Spring Boot backend
@@ -28,7 +29,8 @@ axiosInstance.interceptors.response.use(
       // Token expired or invalid
       console.warn("JWT expired or unauthorized. Logging out...");
       localStorage.removeItem('token');
-      window.location.href = '/login'; // Redirect to login page
+      const navigate = getNavigate();
+      if (navigate) navigate('/login'); // Redirect to login page
     }
     return Promise.reject(error);
   }

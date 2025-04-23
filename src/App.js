@@ -1,10 +1,9 @@
 // src/App.js
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import UpdateProfile from './pages/UpdateProfile';
@@ -20,11 +19,19 @@ import PDFS from './admin/PDFS';
 
 import Users from './admin/Users';
 import AddPost from './admin/AddPost';
+import { setNavigate } from './components/navigateServices';
+
 
 
 const App = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setNavigate(navigate); // inject nav function globally
+  }, [navigate]);
+
   return (
-    <Router>
+    <>
       <Navbar />
       <div className="pt-16">
         <Routes>
@@ -35,7 +42,7 @@ const App = () => {
           <Route path="/email-config" element={<EmailConfigManager />} />
           <Route path="/refer-and-earn" element={<ReferAndEarn />} />
           <Route path="/upgrade-plan" element={<Subscription />} />
-          <Route path="/upgrade/sucess" element={<UpgradeSucess />} />
+          <Route path="/upgrade/success" element={<UpgradeSucess />} />
 
           <Route path="/user/subscription-list" element={<SubscriptionList />} />
 
@@ -56,9 +63,9 @@ const App = () => {
 
 
       </div>
+    </>
 
 
-    </Router>
   );
 };
 
