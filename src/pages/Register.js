@@ -2,9 +2,11 @@
 import React, { useState } from 'react';
 import axiosInstance from '../components/axiosInstance';
 import { ToastContainer, toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 const Register = () => {
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', phone: '', referralCode :''});
+  const navigate = useNavigate()
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', phone: '', referralCode: '' });
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -17,7 +19,7 @@ const Register = () => {
       await axiosInstance.post('/auth/signup', form);
       toast.success("Registered! Redirecting...");
       setTimeout(() => {
-        window.location.href = "/login";
+        navigate('/login')
       }, 2000);
     } catch (error) {
       const errMsg = error.response?.data || error.message;
