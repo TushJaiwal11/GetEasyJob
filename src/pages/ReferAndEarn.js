@@ -49,8 +49,6 @@ const ReferAndEarn = () => {
                     toast.error('Session expired. Please login again.');
                     localStorage.removeItem('token');
                     navigate('/login');
-                } else {
-                    toast.error(err, "Un-Expected Error");
                 }
             });
     };
