@@ -26,7 +26,9 @@ import { setNavigate } from './components/navigateServices';
 const App = () => {
   const navigate = useNavigate();
 
+
   useEffect(() => {
+    document.title = "Get HR Mails";
     setNavigate(navigate); // inject nav function globally
   }, [navigate]);
 
