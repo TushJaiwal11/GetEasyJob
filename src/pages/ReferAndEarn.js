@@ -50,7 +50,7 @@ const ReferAndEarn = () => {
                     localStorage.removeItem('token');
                     navigate('/login');
                 } else {
-                    showBackendError(err, 'Unexpected error occurred.');
+                    toast.error(err, "Un-Expected Error");
                 }
             });
     };
