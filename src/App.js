@@ -28,7 +28,7 @@ const App = () => {
 
 
   useEffect(() => {
-    document.title = "Get HR Mails";
+    document.title = "Get Job Easyliy";
     setNavigate(navigate); // inject nav function globally
   }, [navigate]);
 
