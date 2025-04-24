@@ -26,15 +26,8 @@ const UpdateProfile = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        fetchProfile(); // fetch profile when component mounts
-        fetchSubscriptionDetails(); // fetch subscription when component mounts
-
-        const interval = setInterval(() => {
-            fetchSubscriptionDetails(); // fetch subscription every 30 mins
-        }, 30 * 60 * 1000); // 30 minutes
-
-        return () => clearInterval(interval); // clean up interval when the component unmounts
-    },);
+        fetchProfile();
+    }, []);
 
     const fetchProfile = () => {
         const token = localStorage.getItem('token');
@@ -61,28 +54,28 @@ const UpdateProfile = () => {
         }
     };
 
-    const fetchSubscriptionDetails = () => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            axiosInstance
-                .get('/user/subscription', {
-                    headers: { Authorization: `Bearer ${token}` },
-                })
-                .then((res) => {
-                    const subscription = res.data;
-                    setUser((prev) => ({
-                        ...prev,
-                        subscriptionPurchaseDate: subscription.purchaseDate,
-                        subscriptionExpiryDate: subscription.expiryDate,
-                        activeSubscription: subscription.active ? 1 : 0
-                    }));
-                })
-                .catch((err) => {
-                    console.error('Error fetching subscription:', err);
-                    toast.error('Failed to fetch subscription');
-                });
-        }
-    };
+    // const fetchSubscriptionDetails = () => {
+    //     const token = localStorage.getItem('token');
+    //     if (token) {
+    //         axiosInstance
+    //             .get('/user/subscription', {
+    //                 headers: { Authorization: `Bearer ${token}` },
+    //             })
+    //             .then((res) => {
+    //                 const subscription = res.data;
+    //                 setUser((prev) => ({
+    //                     ...prev,
+    //                     subscriptionPurchaseDate: subscription.purchaseDate,
+    //                     subscriptionExpiryDate: subscription.expiryDate,
+    //                     activeSubscription: subscription.active ? 1 : 0
+    //                 }));
+    //             })
+    //             .catch((err) => {
+    //                 console.error('Error fetching subscription:', err);
+    //                 toast.error('Failed to fetch subscription');
+    //             });
+    //     }
+    // };
 
     const showErrorToast = (error, fallbackMessage) => {
         const backendError = error?.response?.data?.error;
