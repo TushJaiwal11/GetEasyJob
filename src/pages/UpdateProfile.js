@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axiosInstance from '../components/axiosInstance';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -25,11 +25,7 @@ const UpdateProfile = () => {
     const [previewUrl, setPreviewUrl] = useState(null);
     const navigate = useNavigate();
 
-    useEffect(() => {
-        fetchProfile();
-    }, []);
-
-    const fetchProfile = () => {
+    const fetchProfile = useCallback(() => {
         const token = localStorage.getItem('token');
         if (token) {
             axiosInstance
@@ -52,8 +48,12 @@ const UpdateProfile = () => {
         } else {
             navigate('/login');
         }
-    };
-
+    }, [navigate]); // ✅ now fetchProfile is memoized
+    
+    useEffect(() => {
+        fetchProfile();
+    }, [fetchProfile]); // ✅ warning is gone
+    
     // const fetchSubscriptionDetails = () => {
     //     const token = localStorage.getItem('token');
     //     if (token) {
