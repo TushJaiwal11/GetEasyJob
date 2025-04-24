@@ -8,27 +8,29 @@ const Subscription = () => {
     const [formData, setFormData] = useState({});
     const [loading, setLoading] = useState(false);
 
-    const fetchProfile = async (token) => {
-        try {
-            const res = await axiosInstance.get('/api/profile', {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            setFormData(res.data);
-        } catch (err) {
-            toast.error("Session expired. Please login again.");
-            localStorage.removeItem("token");
-            navigate("/login");
-        }
-    };
-
     useEffect(() => {
         const token = localStorage.getItem("token");
+
+        const fetchProfile = async () => {
+            try {
+                const res = await axiosInstance.get('/api/profile', {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                setFormData(res.data);
+            } catch (err) {
+                toast.error("Session expired. Please login again.");
+                localStorage.removeItem("token");
+                navigate("/login");
+            }
+        };
+
         if (!token) {
             navigate("/login");
         } else {
-            fetchProfile(token);
+            fetchProfile();
         }
     }, [navigate]);
+
 
     const handleSubscribe = async (planType) => {
         setLoading(true);
