@@ -11,15 +11,6 @@ const ReferAndEarn = () => {
     const [referredUsers, setReferredUsers] = useState([]);
     const [totalPoints, setTotalPoints] = useState(0);
 
-    // ✅ Centralized error handler
-    const showBackendError = (err, fallbackMsg) => {
-        const error = err?.response?.data?.error;
-        const details = err?.response?.data?.details;
-        const message = error || details || fallbackMsg;
-        toast.error(message);
-        console.error(message, err);
-    };
-
     // ✅ Fetch user data and points once on mount
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -82,7 +73,6 @@ const ReferAndEarn = () => {
                 setReferredUsers(users);
             })
             .catch((err) => {
-                showBackendError(err, 'Failed to fetch referred users');
                 setReferredUsers([]);
             });
     };
