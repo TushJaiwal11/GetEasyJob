@@ -26,7 +26,8 @@ const SubscriptionList = () => {
         navigate('/login');
     }, [navigate]);
 
-    const fetchHistory = (token) => {
+    const fetchHistory = useCallback((token) => {
+        setIsLoggedInState(!!token);
         axiosInstance
             .get('/api/user/subscription/history', {
                 headers: { Authorization: `Bearer ${token}` },
@@ -43,7 +44,8 @@ const SubscriptionList = () => {
                     showBackendError(err, 'Unexpected error occurred.');
                 }
             });
-    };
+    }, [navigate]);
+
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -61,7 +63,8 @@ const SubscriptionList = () => {
                     if (err.response?.status === 401) handleLogout();
                 });
         }
-    }, [handleLogout]);
+    }, [handleLogout, fetchHistory]);
+
 
     const formatDate = (dateString) => {
         const date = new Date(dateString);
@@ -73,7 +76,24 @@ const SubscriptionList = () => {
 
     return (
         <div className="p-6 max-w-6xl mx-auto bg-white rounded-xl shadow-md mt-10">
-            <h2 className="text-3xl font-semibold text-gray-800 mb-6 text-center">📜 Subscription History</h2>
+            <h2 className="text-3xl font-semibold text-gray-800 mb-6 text-center">
+                📜 Subscription History
+            </h2>
+
+            <div className="flex justify-between items-center mb-4">
+                {user && (
+                    <div className="text-sm text-gray-700">
+                        👤 Welcome, <span className="font-semibold">{user.fullName}</span>
+                    </div>
+                )}
+                <div>
+                    {isLoggedInState ? (
+                        <p className="text-green-600 text-sm"></p>
+                    ) : (
+                        <p className="text-red-500 text-sm"></p>
+                    )}
+                </div>
+            </div>
 
             <div className="overflow-x-auto">
                 <table className="min-w-full border border-gray-200 rounded-lg text-sm text-gray-700">
@@ -103,9 +123,8 @@ const SubscriptionList = () => {
                                 return (
                                     <tr
                                         key={index}
-                                        className={`border-t transition hover:bg-gray-50 ${
-                                            isActive ? 'bg-green-50' : 'bg-red-50'
-                                        }`}
+                                        className={`border-t transition hover:bg-gray-50 ${isActive ? 'bg-green-50' : 'bg-red-50'
+                                            }`}
                                     >
                                         <td className="p-3">{index + 1}</td>
                                         <td className="p-3 font-medium">{sub.planType}</td>

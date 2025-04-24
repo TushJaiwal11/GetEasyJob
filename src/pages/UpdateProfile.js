@@ -34,7 +34,7 @@ const UpdateProfile = () => {
         }, 30 * 60 * 1000); // 30 minutes
 
         return () => clearInterval(interval); // clean up interval when the component unmounts
-    }, []);
+    },);
 
     const fetchProfile = () => {
         const token = localStorage.getItem('token');

@@ -29,7 +29,7 @@ const ReferAndEarn = () => {
             fetchProfile(token);
             fetchReferralPoints(token);
         }
-    }, []); // ✅ add dependency array to run only once
+    },); // ✅ add dependency array to run only once
 
     const fetchProfile = (token) => {
         axiosInstance
