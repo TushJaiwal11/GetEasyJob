@@ -20,6 +20,7 @@ import PDFS from './admin/PDFS';
 import Users from './admin/Users';
 import AddPost from './admin/AddPost';
 import { setNavigate } from './components/navigateServices';
+import DownloadePdf from './pages/DownloadPdf';
 
 
 
@@ -45,7 +46,7 @@ const App = () => {
           <Route path="/refer-and-earn" element={<ReferAndEarn />} />
           <Route path="/upgrade-plan" element={<Subscription />} />
           <Route path="/upgrade/success" element={<UpgradeSucess />} />
-
+          <Route path="/download-pdf" element={<DownloadePdf />} />
           <Route path="/user/subscription-list" element={<SubscriptionList />} />
 
           <Route path="/admin" element={<AdminDashboard />}>

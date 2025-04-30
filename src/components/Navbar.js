@@ -145,17 +145,6 @@ const Navbar = () => {
               </text>
             </svg>
           </div>
-
-          {/* ✅ PDF Download Button */}
-          {user.activeSubscription === 1 && (
-            <Link
-              to="/download-pdf"
-              className="bg-white text-blue-600 px-3 py-2 rounded-lg font-medium shadow hover:bg-gray-100 transition"
-            >
-              Download PDF
-            </Link>
-          )}
-
           {/* Profile */}
           <div
             className="flex items-center space-x-2 cursor-pointer"
@@ -197,6 +186,15 @@ const Navbar = () => {
               {user?.role === 'ROLE_ADMIN' && (
                 <Link to="/admin" className="block px-4 py-2 hover:bg-gray-100 font-semibold text-blue-600">
                   Admin Dashboard
+                </Link>
+              )}
+
+              {user.activeSubscription === 1 && (
+                <Link
+                  to="/download-pdf"
+                  className="block px-4 py-2 hover:bg-gray-100 font-semibold text-blue-600"
+                >
+                  Download PDF
                 </Link>
               )}
 
