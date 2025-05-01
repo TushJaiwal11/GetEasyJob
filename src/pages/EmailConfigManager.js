@@ -48,7 +48,7 @@ const EmailConfigManager = () => {
         const isUpload = !isEditMode;
 
         const headers = {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`//euiew
         };
 
         let payload;
