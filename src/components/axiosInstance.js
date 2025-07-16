@@ -4,7 +4,7 @@ import { getNavigate } from './navigateServices';
 
 const axiosInstance = axios.create({
   // baseURL: 'https://emailsend.up.railway.app/', // Spring Boot backend
-  baseURL: 'http://localhost:9191', // Spring Boot backend
+  baseURL: 'http://localhost:9190', // Spring Boot backend
   headers: {
     'Content-Type': 'application/json',
   },
