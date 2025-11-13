@@ -4,6 +4,7 @@ import axiosInstance from "../components/axiosInstance";
 import { useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
+import authService from "../services/authService";
 
 const Dashboard = () => {
     const navigate = useNavigate();
@@ -11,26 +12,27 @@ const Dashboard = () => {
     const [posts, setPosts] = useState([]);
 
     const handleLogout = useCallback(() => {
-        localStorage.removeItem("token");
-        toast.error("Session expired or user not found. Please login again.");
+        console.log('🔴 Logging out from dashboard...');
+        authService.logout();
+        toast.error("Session expired. Please login again.");
         navigate("/login");
     }, [navigate]);
 
-    const fetchPosts = async (token) => {
-        try {
-            const res = await axiosInstance.get("/api/admin/get-post", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            setPosts(res.data);
-        } catch (err) {
-            toast.error("Error fetching posts.");
-        }
-    };
+    // const fetchPosts = async (token) => {
+    //     try {
+    //         const res = await axiosInstance.get("/api/admin/get-post", {
+    //             headers: { Authorization: `Bearer ${token}` },
+    //         });
+    //         setPosts(res.data);
+    //     } catch (err) {
+    //         toast.error("Error fetching posts.");
+    //     }
+    // };
 
     useEffect(() => {
         const token = localStorage.getItem("token");
         if (!token) return handleLogout();
-        fetchPosts(token);
+        // fetchPosts(token);
     }, [handleLogout]);
 
    
