@@ -1,75 +1,106 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import axiosInstance from './axiosInstance';
+import userService from '../services/userService';
+import authService from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 
-const ONE_DAY_SECONDS = 86400;
+const DEFAULT_AVATAR = 'https://img.freepik.com/free-psd/lantern-isolated-transparent-background_191095-32472.jpg';
 
 const Navbar = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
+  const { isAuthenticated, logout: contextLogout } = useAuth();
   const [user, setUser] = useState(null);
+  const [profileImageUrl, setProfileImageUrl] = useState(null);
+  const [imageLoading, setImageLoading] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(ONE_DAY_SECONDS);
-  const timerRef = useRef();
   const dropdownRef = useRef();
+  const profileImageUrlRef = useRef(null);
   const navigate = useNavigate();
 
+  // 🔹 Logout logic
   const handleLogout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('timerStart');
-    setIsLoggedIn(false);
-    setUser(null);
-    clearInterval(timerRef.current);
-    navigate('/login');
-  }, [navigate]);
+    console.log('🔴 Logging out user...');
+    authService.logout();
 
-  const initializeTimer = useCallback(() => {
-    let startTime = localStorage.getItem('timerStart');
-    if (!startTime) {
-      startTime = Date.now();
-      localStorage.setItem('timerStart', startTime);
+    // Clean up blob URL memory
+    if (profileImageUrlRef.current?.startsWith('blob:')) {
+      URL.revokeObjectURL(profileImageUrlRef.current);
+      profileImageUrlRef.current = null;
     }
 
-    const updateCountdown = () => {
-      const now = Date.now();
-      const elapsed = Math.floor((now - startTime) / 1000);
-      const remaining = ONE_DAY_SECONDS - elapsed;
+    setUser(null);
+    setProfileImageUrl(null);
+    contextLogout();
+    navigate('/login');
+  }, [navigate, contextLogout]);
 
-      if (remaining <= 0) {
-        clearInterval(timerRef.current);
-        handleLogout();
-        setTimeLeft(0);
-        return;
+  // 🔹 Fetch user profile + image
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      console.log('📤 Fetching user profile...');
+      const profileData = await userService.getProfile();
+      console.log('✅ Profile loaded:', profileData);
+      setUser(profileData);
+
+      // 🔹 Load image only if user has one
+      if (profileData.imageUrl && profileData.id) {
+        setImageLoading(true);
+        const imageUrl = await userService.getUserProfileImage(profileData.id);
+
+        // Revoke any previous blob URL
+        if (profileImageUrlRef.current?.startsWith('blob:')) {
+          URL.revokeObjectURL(profileImageUrlRef.current);
+        }
+
+        // Save new blob URL
+        profileImageUrlRef.current = imageUrl;
+        setProfileImageUrl(imageUrl);
+        console.log('✅ Profile image loaded');
+      } else {
+        // No image available
+        if (profileImageUrlRef.current?.startsWith('blob:')) {
+          URL.revokeObjectURL(profileImageUrlRef.current);
+          profileImageUrlRef.current = null;
+        }
+        setProfileImageUrl(null);
       }
+    } catch (error) {
+      console.error('❌ Profile fetch failed:', error);
 
-      setTimeLeft(remaining);
-    };
+      // Only handle non-401 errors (interceptor handles 401)
+      const status = error.response?.status;
 
-    updateCountdown();
-    timerRef.current = setInterval(updateCountdown, 1000);
+      if (status !== 401) {
+        // For other errors, logout
+        console.error('❌ Non-recoverable error. Logging out...');
+        handleLogout();
+      } else {
+        // 401 errors are handled by interceptor, just log it
+        console.log('⚠️ 401 detected - interceptor should have handled token refresh');
+      }
+    } finally {
+      setImageLoading(false);
+    }
   }, [handleLogout]);
 
+  // 🔹 Watch authentication changes
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    setIsLoggedIn(!!token);
-
-    if (token) {
-      axiosInstance
-        .get('/api/profile', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        .then((res) => {
-          setUser(res.data);
-          initializeTimer();
-        })
-        .catch((err) => {
-          console.error("Profile fetch failed", err);
-          if (err.response?.status === 401) handleLogout();
-        });
+    if (isAuthenticated) {
+      fetchUserProfile();
+    } else {
+      setUser(null);
+      setProfileImageUrl(null);
     }
 
-    return () => clearInterval(timerRef.current);
-  }, [initializeTimer, handleLogout]);
+    return () => {
+      // Cleanup blob URL
+      if (profileImageUrlRef.current?.startsWith('blob:')) {
+        URL.revokeObjectURL(profileImageUrlRef.current);
+        profileImageUrlRef.current = null;
+      }
+    };
+  }, [isAuthenticated, fetchUserProfile]);
 
+  // 🔹 Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -83,8 +114,9 @@ const Navbar = () => {
     };
   }, []);
 
+  // 🔹 Dropdown toggler
   const toggleDropdown = (e) => {
-    e.stopPropagation();  // Prevent this event from propagating to document
+    e.stopPropagation();
     setDropdownOpen(!dropdownOpen);
   };
 
@@ -92,69 +124,42 @@ const Navbar = () => {
     setDropdownOpen(false);
   };
 
-  const formatTime = (seconds) => {
-    const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-    const s = String(seconds % 60).padStart(2, '0');
-    return `${h}:${m}:${s}`;
+  const getProfileImageSrc = () => {
+    if (imageLoading) {
+      return DEFAULT_AVATAR;
+    }
+    return profileImageUrl || DEFAULT_AVATAR;
   };
 
-  const radius = 30;
-  const circumference = 2 * Math.PI * radius;
-  const progress = (timeLeft / ONE_DAY_SECONDS) * circumference;
+  const handleImageError = (e) => {
+    console.error('Image failed to load');
+    e.target.src = DEFAULT_AVATAR;
+  };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-blue-600 px-6 py-3 text-white flex justify-between items-center shadow-md">
-      <Link to="/" className="text-xl font-bold tracking-wide">Easy Share</Link>
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-blue-600 px-6 py-4 text-white flex justify-between items-center shadow-md">
+      <Link to="/" className="text-xl font-bold tracking-wide">Hire Hunt</Link>
 
-      {isLoggedIn && user ? (
+      {isAuthenticated && user ? (
         <div className="relative flex items-center gap-6" ref={dropdownRef}>
-          {/* Timer Circle */}
-          <div className="w-[60px] h-[60px]">
-            <svg width="60" height="60">
-              <circle
-                cx="30"
-                cy="30"
-                r={radius}
-                stroke="#fff"
-                strokeWidth="4"
-                fill="transparent"
-                style={{ opacity: 0.3 }}
-              />
-              <circle
-                cx="30"
-                cy="30"
-                r={radius}
-                stroke="#00FFAA"
-                strokeWidth="4"
-                fill="transparent"
-                strokeDasharray={circumference}
-                strokeDashoffset={circumference - progress}
-                transform="rotate(-90 30 30)"
-                strokeLinecap="round"
-              />
-              <text
-                x="50%"
-                y="55%"
-                textAnchor="middle"
-                fill="#fff"
-                fontSize="10"
-                fontWeight="bold"
-              >
-                {formatTime(timeLeft)}
-              </text>
-            </svg>
-          </div>
           {/* Profile */}
           <div
             className="flex items-center space-x-2 cursor-pointer"
-            onClick={toggleDropdown} // Toggling the dropdown when clicked
+            onClick={toggleDropdown}
           >
-            <img
-              src={user.image ? `data:image/jpeg;base64,${user.image}` : 'https://img.freepik.com/free-psd/lantern-isolated-transparent-background_191095-32472.jpg'}
-              alt="Profile"
-              className="w-10 h-10 rounded-full border-2 border-white object-cover"
-            />
+            <div className="relative">
+              <img
+                src={getProfileImageSrc()}
+                alt="Profile"
+                className="w-10 h-10 rounded-full border-2 border-white object-cover"
+                onError={handleImageError}
+              />
+              {imageLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                </div>
+              )}
+            </div>
             <span className="font-medium hover:underline">
               {user.fullName || user.email}
             </span>
@@ -164,7 +169,7 @@ const Navbar = () => {
           {dropdownOpen && (
             <div
               className="absolute top-14 right-0 w-48 bg-white text-black rounded-lg shadow-lg z-50 overflow-hidden"
-              onClick={handleDropdownClose} // Close dropdown if any part inside is clicked
+              onClick={handleDropdownClose}
             >
               <Link to="/profile" className="block px-4 py-2 hover:bg-gray-100">
                 Profile
@@ -178,17 +183,18 @@ const Navbar = () => {
               <Link to="/refer-and-earn" className="block px-4 py-2 hover:bg-gray-100">
                 Refer & Earn
               </Link>
-              <Link to="/user/Subscription-list" className="block px-4 py-2 hover:bg-gray-100">
+              <Link to="/user/subscription-history" className="block px-4 py-2 hover:bg-gray-100">
                 Subscription History
               </Link>
 
-              {/* ✅ Admin Only Dropdown */}
-              {user?.role === 'ROLE_ADMIN' && (
+              {/* Admin Only Dropdown */}
+              {authService.isAdmin() && (
                 <Link to="/admin" className="block px-4 py-2 hover:bg-gray-100 font-semibold text-blue-600">
                   Admin Dashboard
                 </Link>
               )}
 
+              {/* Premium Feature - PDF Download */}
               {user.activeSubscription === 1 && (
                 <Link
                   to="/download-pdf"

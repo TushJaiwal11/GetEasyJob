@@ -1,13 +1,21 @@
+// src/pages/Register.js
 import React, { useState } from 'react';
-import axiosInstance from '../components/axiosInstance';
 import { useNavigate } from 'react-router-dom';
-import '../App.css';
 import { toast, ToastContainer } from 'react-toastify';
+import authService from '../services/authService';
+import '../App.css';
 
 const Register = () => {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', phone: '', referralCode: '' });
-  const [loading, setLoading] = useState(false); // New state for loading
+  const [form, setForm] = useState({
+    fullName: '',
+    email: '',
+    username: '',
+    password: '',
+    phone: '',
+    referralCode: ''
+  });
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -15,21 +23,48 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true); // Start loading
+    setLoading(true);
 
     try {
-      await axiosInstance.post('/auth/signup', form);
-      toast.success("Registered! Redirecting...");
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
-    } catch (error) {
-      const errMsg = error.response?.data || error.message;
-      toast.error(`Error: ${errMsg}`);
+      const response = await authService.register(form);
+
+      // ✅ Handle success
+      if (response?.success) {
+        toast.success(response?.message || "User registered successfully!");
+        setTimeout(() => navigate("/login"), 2000);
+      } else {
+        let message =
+          response?.message ||
+          response?.data?.error ||
+          "Registration failed";
+
+        // ✅ Extract nested errorMessage from JSON text
+        const match = message.match(/"errorMessage":"([^"]+)"/);
+        if (match) {
+          message = match[1];
+        }
+
+        toast.error(message);
+      }
+
+    } catch (err) {
+      // ✅ Handle errors (like 409)
+      const errorResponse = err?.response?.data ?? err?.data ?? {};
+      let message = errorResponse?.message || "Registration failed";
+
+      // ✅ Extract nested errorMessage inside JSON string if present
+      const match = message.match(/"errorMessage":"([^"]+)"/);
+      if (match) {
+        message = match[1];
+      }
+
+      // ✅ Show error toast
+      toast.error(message);
     } finally {
-      setLoading(false); // Stop loading
+      setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen flex justify-center items-center bg-gray-100">
@@ -52,6 +87,16 @@ const Register = () => {
             value={form.email}
             onChange={handleChange}
             placeholder="Email"
+            className="w-full px-3 py-2 border rounded mb-3"
+            required
+          />
+
+          <input
+            type="text"
+            name="username"
+            value={form.username}
+            onChange={handleChange}
+            placeholder="Username"
             className="w-full px-3 py-2 border rounded mb-3"
             required
           />
@@ -96,7 +141,6 @@ const Register = () => {
               'Register'
             )}
           </button>
-
         </form>
 
         <ToastContainer />

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axiosInstance from '../components/axiosInstance';
 import { toast, ToastContainer } from 'react-toastify';
+import userService from '../services/userService';
+
 const ReferAndEarn = () => {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({});
@@ -11,69 +12,52 @@ const ReferAndEarn = () => {
     const [totalPoints, setTotalPoints] = useState(0);
 
     const handleAuthError = (err) => {
-        if (err?.response?.status === 401) {
+        const status = err?.response?.status ?? err?.status;
+        if (status === 401) {
             toast.error('Session expired. Please login again.');
             localStorage.removeItem('token');
             navigate('/login');
+        } else {
+            // optionally show other errors
+            const msg = err?.response?.data?.message ?? err?.message;
+            if (msg) toast.error(msg);
         }
     };
 
     useEffect(() => {
+        // run once
         const token = localStorage.getItem('token');
         if (!token) {
             navigate('/login');
             return;
         }
-        fetchProfile(token);
-        fetchReferralPoints(token);
-    });
 
-    const fetchProfile = (token) => {
-        axiosInstance
-            .get('/api/profile', {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-            .then((res) => {
-                const data = res.data;
-                setFormData(data);
-                setReferralCode(data.referralCode);
-                fetchReferredUsers(data.referralCode, token);
-                setLoading(false);
-            })
-            .catch((err) => {
-                setLoading(false);
-                handleAuthError(err);
-            });
-    };
+        const init = async () => {
+            setLoading(true);
+            try {
+                // get profile via userService
+                const profile = await userService.getProfile();
+                setFormData(profile);
+                setReferralCode(profile.referralCode || '');
 
-    const fetchReferralPoints = (token) => {
-        axiosInstance
-            .get('/api/referral/points', {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-            .then((res) => {
-                const points = res.data?.totalPoint ?? 0;
-                setTotalPoints(points);
-            })
-            .catch((err) => {
-                setLoading(false);
-                handleAuthError(err);
-            });
-    };
-
-    const fetchReferredUsers = (code, token) => {
-        axiosInstance
-            .get(`/api/referral/referred-users`, {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-            .then((res) => {
-                const users = Array.isArray(res.data) ? res.data : res.data?.users || [];
+                // fetch referred users and referral points via userService
+                const referred = await userService.getReferredUsers();
+                const users = Array.isArray(referred) ? referred : referred?.users ?? [];
                 setReferredUsers(users);
-            })
-            .catch(() => {
-                setReferredUsers([]);
-            });
-    };
+
+                const pointsResp = await userService.getReferralPoints();
+                const points = pointsResp?.totalPoint ?? pointsResp?.totalPoints ?? 0;
+                setTotalPoints(points);
+            } catch (err) {
+                handleAuthError(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        init();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleCopy = () => {
         if (referralCode) {
@@ -82,9 +66,10 @@ const ReferAndEarn = () => {
         }
     };
 
-    const isSubscribed = formData?.activeSubscription === 1;
+    const isSubscribed = formData?.activeSubscription === true;
+    
+      
 
-    // ✅ Spinner Loader
     if (loading) {
         return (
             <div className="flex justify-center items-center h-40 mt-10">
@@ -92,6 +77,7 @@ const ReferAndEarn = () => {
             </div>
         );
     }
+
     return (
         <div className="flex flex-col md:flex-row max-w-6xl mx-auto mt-10 gap-6">
             {/* Sidebar */}

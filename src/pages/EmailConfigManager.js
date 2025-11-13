@@ -1,39 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import axiosInstance from '../components/axiosInstance';
+import userService from '../services/userService';
 import { toast, ToastContainer } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 const EmailConfigManager = () => {
     const [configs, setConfigs] = useState([]);
     const [selectedConfigId, setSelectedConfigId] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
-    const [loading, setLoading] = useState(true); // ✅ loading state added
+    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
     const [formData, setFormData] = useState({
-        id: '',
         email: '',
         subject: '',
         mailBody: '',
         appPassword: ''
     });
 
+    // Fetch all email configs
     useEffect(() => {
         fetchConfigs();
     }, []);
 
     const fetchConfigs = async () => {
-        setLoading(true); // ✅ Start loading
-        const token = localStorage.getItem('token');
+        setLoading(true);
         try {
-            const res = await axiosInstance.get('/api/getAllMailConfig', {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            setConfigs(res.data);
+            const res = await userService.getEmailConfigs();
+            // API returns { success, message, data } => handle accordingly
+            if (res.success) {
+                setConfigs(res.data);
+            } else {
+                toast.error(res.message || 'Failed to load email configurations.');
+            }
         } catch (error) {
             toast.error('Failed to fetch email configurations.');
             console.error(error);
         } finally {
-            setLoading(false); // ✅ Stop loading
+            setLoading(false);
         }
     };
 
@@ -44,39 +48,29 @@ const EmailConfigManager = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const token = localStorage.getItem('token');
-        const isUpload = !isEditMode;
 
-        const headers = {
-            Authorization: `Bearer ${token}`//euiew
-        };
-
-        let payload;
-
-        if (isUpload) {
-            payload = new FormData();
-            Object.entries(formData).forEach(([key, value]) => {
-                payload.append(key, value);
-            });
-            headers['Content-Type'] = 'multipart/form-data';
-        } else {
-            payload = formData;
+        const { email, subject, mailBody, appPassword } = formData;
+        if (!email || !subject || !mailBody || !appPassword) {
+            toast.error('All fields are required.');
+            return;
         }
 
-        const endpoint = isUpload
-            ? '/api/upload'
-            : `/api/updateConfig/${selectedConfigId}`;
-
         try {
-            const res = await axiosInstance.post(endpoint, payload, { headers });
-            if (res?.data?.error) {
-                toast.error('Failed to save email configuration.');
+            let res;
+            if (isEditMode && selectedConfigId) {
+                res = await userService.updateEmailConfig(selectedConfigId, formData);
             } else {
-                toast.success(isUpload ? 'Uploaded!' : 'Updated!');
+                res = await userService.createEmailConfig(formData);
+            }
+
+            if (res.success) {
+                toast.success(isEditMode ? 'Configuration updated!' : 'Configuration created!');
                 setShowModal(false);
                 setIsEditMode(false);
-                setFormData({ id: '', email: '', subject: '', mailBody: '', appPassword: '' });
+                setFormData({ email: '', subject: '', mailBody: '', appPassword: '' });
                 fetchConfigs();
+            } else {
+                toast.error(res.message || 'Failed to save configuration.');
             }
         } catch (error) {
             toast.error('Error while saving configuration.');
@@ -86,7 +80,7 @@ const EmailConfigManager = () => {
 
     const handleEdit = (config) => {
         setFormData({
-            email: config.email,
+            email: config.senderEmailId || config.email,
             subject: config.subject,
             mailBody: config.mailBody,
             appPassword: config.appPassword
@@ -97,22 +91,34 @@ const EmailConfigManager = () => {
     };
 
     const handleDelete = async (id) => {
-        const token = localStorage.getItem('token');
+        if (!window.confirm('Are you sure you want to delete this configuration?')) return;
         try {
-            const res = await axiosInstance.delete(`/api/deleteConfig/${id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res?.data?.error) {
-                toast.error('Failed to delete email configuration.');
-            } else {
+            const res = await userService.deleteEmailConfig(id);
+            if (res.success) {
                 toast.success('Configuration deleted.');
                 fetchConfigs();
+            } else {
+                toast.error(res.message || 'Failed to delete configuration.');
             }
         } catch (error) {
-            toast.error('Failed to delete configuration.');
+            toast.error('Error deleting configuration.');
             console.error(error);
         }
     };
+
+    const handleUseConfig = (config) => {
+        localStorage.setItem('selectedEmailConfig', JSON.stringify(config));
+        navigate('/email-share', {
+            state: { selectedConfig: config, configId: config.id }
+        });
+    };
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            navigate('/login');
+        }
+    }, [navigate]);
 
     return (
         <div className="p-6">
@@ -125,31 +131,42 @@ const EmailConfigManager = () => {
             ) : (
                 <>
                     <div className="flex flex-wrap gap-4 mb-6">
-                        {configs.map((config) => (
-                            <div
-                                key={config.id}
-                                className="border p-4 rounded shadow bg-white w-full sm:w-[48%] md:w-[45%] lg:w-[32%] xl:w-[100%] break-words"
-                            >
-                                <p><strong>Email:</strong> {config.email}</p>
-                                <p><strong>Subject:</strong> {config.subject}</p>
-                                <p><strong>Mail Body:</strong></p>
-                                <p className="whitespace-pre-wrap">{config.mailBody}</p>
-                                <div className="flex justify-end gap-2 mt-4">
-                                    <button
-                                        onClick={() => handleEdit(config)}
-                                        className="px-3 py-1 bg-yellow-500 text-white rounded"
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(config.id)}
-                                        className="px-3 py-1 bg-red-600 text-white rounded"
-                                    >
-                                        Delete
-                                    </button>
+                        {configs.length > 0 ? (
+                            configs.map((config) => (
+                                <div
+                                    key={config.id}
+                                    className="border p-4 rounded shadow bg-white w-full sm:w-[48%] md:w-[45%] lg:w-[32%] xl:w-[30%]"
+                                >
+                                    <p><strong>Email:</strong> {config.senderEmailId || config.email}</p>
+                                    <p><strong>Subject:</strong> {config.subject}</p>
+                                    <p><strong>Mail Body:</strong></p>
+                                    <p className="whitespace-pre-wrap break-words">{config.mailBody}</p>
+
+                                    <div className="flex justify-end gap-2 mt-4">
+                                        <button
+                                            onClick={() => handleUseConfig(config)}
+                                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                        >
+                                            Use
+                                        </button>
+                                        <button
+                                            onClick={() => handleEdit(config)}
+                                            className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(config.id)}
+                                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))
+                        ) : (
+                            <p className="text-gray-600">No configurations found.</p>
+                        )}
                     </div>
 
                     <button
@@ -159,7 +176,7 @@ const EmailConfigManager = () => {
                             setIsEditMode(false);
                             setShowModal(true);
                         }}
-                        className="bg-green-600 text-white px-4 py-2 rounded"
+                        className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
                     >
                         Add New Config
                     </button>
@@ -214,13 +231,13 @@ const EmailConfigManager = () => {
                                         setIsEditMode(false);
                                         setFormData({ email: '', subject: '', mailBody: '', appPassword: '' });
                                     }}
-                                    className="px-4 py-2 bg-gray-300 rounded"
+                                    className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400 transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-blue-600 text-white rounded"
+                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                                 >
                                     {isEditMode ? 'Update' : 'Save'}
                                 </button>

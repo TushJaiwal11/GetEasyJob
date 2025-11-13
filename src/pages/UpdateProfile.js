@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axiosInstance from '../components/axiosInstance';
+import userService from '../services/userService';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 // Loading Spinner Component
 const LoadingSpinner = () => (
@@ -12,7 +13,7 @@ const LoadingSpinner = () => (
 );
 
 const UpdateProfile = () => {
-    const [user, setUser] = useState({
+    const [userData, setUserData] = useState({
         id: '',
         fullName: '',
         gender: '',
@@ -32,177 +33,218 @@ const UpdateProfile = () => {
     const [previewUrl, setPreviewUrl] = useState(null);
     const navigate = useNavigate();
 
-    const fetchProfile = useCallback(() => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            axiosInstance
-                .get('/api/profile', {
-                    headers: { Authorization: `Bearer ${token}` },
-                })
-                .then((res) => {
-                    setUser(res.data);
-                    if (res.data.image) {
-                        const imageBase64 = `data:image/jpeg;base64,${res.data.image}`;
-                        setPreviewUrl(imageBase64);
-                    }
-                    setLoading(false);
-                })
-                .catch((err) => {
-                    showErrorToast(err, "Failed to fetch profile");
-                    setLoading(false);
-                    navigate('/login');
-                });
-        } else {
+    const { isAuthenticated, user, refreshUserProfile } = useAuth();
+
+    // Cleanup function for blob URLs
+    const cleanupBlobUrl = useCallback((url) => {
+        if (url && url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+        }
+    }, []);
+
+    const fetchProfile = useCallback(async (forceRefresh = false) => {
+        try {
+            const profileData = await userService.getProfile();
+            setUserData(profileData);
+
+            // Cleanup old preview URL before setting new one
+            if (previewUrl) {
+                cleanupBlobUrl(previewUrl);
+            }
+
+            if (profileData.imageUrl) {
+                // Add timestamp to force cache bypass
+                const timestamp = forceRefresh ? `?t=${Date.now()}` : '';
+                const imageBase64 = await userService.getUserProfileImage(profileData.id + timestamp);
+                setPreviewUrl(imageBase64);
+            } else {
+                setPreviewUrl(null);
+            }
+            setLoading(false);
+        } catch (error) {
+            showErrorToast(error, "Failed to fetch profile");
+            setLoading(false);
             navigate('/login');
         }
-    }, [navigate]);
+    }, [navigate, cleanupBlobUrl]);
 
     useEffect(() => {
         fetchProfile();
-    }, [fetchProfile]);
+
+        // Cleanup on unmount
+        return () => {
+            if (previewUrl) {
+                cleanupBlobUrl(previewUrl);
+            }
+        };
+    }, []);
 
     const showErrorToast = (error, fallbackMessage) => {
-        const backendError = error?.response?.data?.error;
+        const backendError = error?.response?.data?.error || error?.message;
         toast.error(backendError || fallbackMessage || "An error occurred");
     };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setUser((prev) => ({ ...prev, [name]: value }));
+        setUserData((prev) => ({ ...prev, [name]: value }));
     };
 
-    const handleUpdate = () => {
-        const token = localStorage.getItem('token');
-        axiosInstance
-            .patch(`/api/profile/update/${user.id}`, user, {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-            .then((res) => {
-                toast.success('Profile updated successfully!');
-                setUser(res.data);
-                setIsEditable(false);
-            })
-            .catch((error) => {
-                showErrorToast(error, "Profile update failed");
-            });
+    const handleUpdate = async () => {
+        try {
+            const updatedUser = await userService.updateProfile(userData.id, userData);
+            toast.success('Profile updated successfully!');
+            setUserData(updatedUser);
+            setIsEditable(false);
+        } catch (error) {
+            showErrorToast(error, "Profile update failed");
+        }
     };
 
     const handleImageChange = (e) => {
         const file = e.target.files[0];
         if (file && file.type.startsWith("image/")) {
+            // Cleanup old preview
+            if (previewUrl && previewUrl.startsWith('blob:')) {
+                cleanupBlobUrl(previewUrl);
+            }
+
             setSelectedImage(file);
-            setPreviewUrl(URL.createObjectURL(file));
+            // Create new preview
+            const newPreviewUrl = URL.createObjectURL(file);
+            setPreviewUrl(newPreviewUrl);
         } else {
             toast.warn("Please select a valid image file.");
         }
     };
 
-    const uploadImage = () => {
+    const uploadImage = async () => {
         if (!selectedImage) {
             toast.warn("Please select an image to upload!");
             return;
         }
 
-        const token = localStorage.getItem('token');
-        const formData = new FormData();
-        formData.append('image', selectedImage);
+        try {
+            const response = await userService.uploadProfileImage(selectedImage);
 
-        axiosInstance
-            .patch('/api/profile/upload-image', formData, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'multipart/form-data',
-                },
-            })
-            .then(() => {
-                setSelectedImage(null);
-                fetchProfile(); // refresh image from server
-                toast.success('Image uploaded successfully!');
-            })
-            .catch((err) => {
-                showErrorToast(err, "Image upload failed");
-            });
+            // Instantly show the new image from backend
+            if (response.imageUrl) {
+                setPreviewUrl(response.imageUrl + '?t=' + Date.now());
+                await refreshUserProfile(); // This will update Navbar instantly
+            }
+
+            setSelectedImage(null);
+            toast.success(response.message || 'Image uploaded successfully!');
+        } catch (error) {
+            showErrorToast(error, "Image upload failed");
+        }
     };
 
-    if (loading) return <LoadingSpinner />; // Show the spinner while loading
+
+
+    if (loading) return <LoadingSpinner />;
 
     return (
         <div className="flex bg-gray-100 min-h-screen p-6">
             {/* Sidebar */}
             <div className="w-1/4 bg-white rounded-md shadow-md p-4">
                 <div className="text-center mb-6">
-                    <div className="relative w-28 h-28 mx-auto">
-                        <img
-                            src={previewUrl || '/default-avatar.png'}
-                            alt="Avatar"
-                            onError={(e) => (e.target.src = '/default-avatar.png')}
-                            className="w-full h-full rounded-full object-cover border-4 border-blue-200 shadow-md"
-                        />
-                        <label
-                            htmlFor="imageUpload"
-                            className="absolute bottom-0 right-0 bg-blue-600 text-white text-xs px-2 py-1 rounded-full cursor-pointer shadow hover:bg-blue-700 transition"
-                        >
-                            ✎
-                        </label>
-                        <input
-                            id="imageUpload"
-                            type="file"
-                            accept="image/jpeg, image/png, image/webp, image/gif"
-                            onChange={handleImageChange}
-                            className="hidden"
-                        />
-                    </div>
+                    {previewUrl ? (
+                        <div className="relative w-28 h-28 mx-auto">
+                            <img
+                                key={previewUrl} // Force re-render on URL change
+                                src={previewUrl}
+                                alt="Profile"
+                                className="w-full h-full rounded-full object-cover border-4 border-blue-200 shadow-md"
+                            />
+                            <label
+                                htmlFor="imageUpload"
+                                className="absolute bottom-0 right-0 bg-blue-600 text-white text-xs px-2 py-1 rounded-full cursor-pointer shadow hover:bg-blue-700 transition"
+                            >
+                                ✎
+                            </label>
+                            <input
+                                id="imageUpload"
+                                type="file"
+                                accept="image/jpeg, image/png, image/webp, image/gif"
+                                onChange={handleImageChange}
+                                className="hidden"
+                            />
+                        </div>
+                    ) : (
+                        <div className="relative w-28 h-28 mx-auto">
+                            <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-4 border-blue-200 shadow-md">
+                                <span className="text-white text-4xl font-bold">
+                                    {userData.fullName ? userData.fullName.charAt(0).toUpperCase() : '?'}
+                                </span>
+                            </div>
+                            <label
+                                htmlFor="imageUpload"
+                                className="absolute bottom-0 right-0 bg-blue-600 text-white text-xs px-2 py-1 rounded-full cursor-pointer shadow hover:bg-blue-700 transition"
+                            >
+                                +
+                            </label>
+                            <input
+                                id="imageUpload"
+                                type="file"
+                                accept="image/jpeg, image/png, image/webp, image/gif"
+                                onChange={handleImageChange}
+                                className="hidden"
+                            />
+                        </div>
+                    )}
 
-                    <button
-                        onClick={uploadImage}
-                        className="mt-4 px-4 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-full transition"
-                    >
-                        Upload Image
-                    </button>
+                    {selectedImage && (
+                        <button
+                            onClick={uploadImage}
+                            className="mt-4 px-4 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-full transition"
+                        >
+                            Upload Image
+                        </button>
+                    )}
 
                     <h2 className="font-semibold mt-4 text-gray-600">Hello,</h2>
-                    <h1 className="text-xl font-bold text-blue-700 truncate max-w-full">{user.fullName}</h1>
+                    <h1 className="text-xl font-bold text-blue-700 truncate max-w-full">{userData.fullName}</h1>
                 </div>
 
-                {user.referralCode && (
+                {userData.referralCode && (
                     <div className="mt-2 text-sm text-gray-600 flex items-center justify-center gap-2">
                         <span className="font-medium">Referral Code:</span>
                         <span
                             className="text-blue-800 font-semibold cursor-pointer hover:underline"
                             title="Click to copy"
                             onClick={() => {
-                                navigator.clipboard.writeText(user.referralCode);
+                                navigator.clipboard.writeText(userData.referralCode);
                                 toast.success('Referral code copied!');
                             }}
                         >
-                            {user.referralCode}
+                            {userData.referralCode}
                         </span>
                     </div>
                 )}
 
-                {user.activeSubscription === 1 && (
+                {userData.activeSubscription === 1 && (
                     <div className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-200 text-sm">
                         <h3 className="font-semibold text-blue-800 mb-2">📅 Subscription Details</h3>
                         <div className="mb-1">
                             <span className="font-medium text-gray-700">Start:</span>{' '}
                             <span className="text-gray-900">
-                                {new Date(user.subscriptionPurchaseDate).toLocaleDateString()}
+                                {new Date(userData.subscriptionPurchaseDate).toLocaleDateString()}
                             </span>
                         </div>
                         <div>
                             <span className="font-medium text-gray-700">Expires:</span>{' '}
                             <span className="text-red-600">
-                                {new Date(user.subscriptionExpiryDate).toLocaleDateString()}
+                                {new Date(userData.subscriptionExpiryDate).toLocaleDateString()}
                             </span>
                         </div>
                     </div>
                 )}
 
-                {user.modified && (
+                {userData.modified && (
                     <div className="mt-6 p-4 rounded-lg bg-gray-50 border border-gray-200 text-sm">
                         <h3 className="font-semibold text-gray-800 mb-2">🕒 Last profile update</h3>
                         <div className="text-gray-700">
-                            {new Date(user.modified).toLocaleDateString()}
+                            {new Date(userData.modified).toLocaleDateString()}
                         </div>
                     </div>
                 )}
@@ -223,7 +265,7 @@ const UpdateProfile = () => {
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <input
                         name="fullName"
-                        value={user.fullName}
+                        value={userData.fullName}
                         onChange={handleChange}
                         className="border rounded-md px-3 py-2"
                         placeholder="Full Name"
@@ -239,7 +281,7 @@ const UpdateProfile = () => {
                                 type="radio"
                                 name="gender"
                                 value="Male"
-                                checked={user.gender === 'Male'}
+                                checked={userData.gender === 'Male'}
                                 onChange={handleChange}
                                 className="mr-1"
                                 disabled={!isEditable}
@@ -251,7 +293,7 @@ const UpdateProfile = () => {
                                 type="radio"
                                 name="gender"
                                 value="Female"
-                                checked={user.gender === 'Female'}
+                                checked={userData.gender === 'Female'}
                                 onChange={handleChange}
                                 className="mr-1"
                                 disabled={!isEditable}
@@ -265,7 +307,7 @@ const UpdateProfile = () => {
                     <h2 className="text-lg font-bold">Email Address</h2>
                     <input
                         name="email"
-                        value={user.email}
+                        value={userData.email}
                         className="border rounded-md px-3 py-2 mt-2 w-full bg-gray-100"
                         disabled
                     />
@@ -275,7 +317,7 @@ const UpdateProfile = () => {
                     <h2 className="text-lg font-bold">Mobile Number</h2>
                     <input
                         name="phone"
-                        value={user.phone}
+                        value={userData.phone}
                         onChange={handleChange}
                         className="border rounded-md px-3 py-2 mt-2 w-full"
                         placeholder="Mobile Number"
@@ -287,7 +329,7 @@ const UpdateProfile = () => {
                     <h2 className="text-lg font-bold">Job Role</h2>
                     <input
                         name="jobRole"
-                        value={user.jobRole}
+                        value={userData.jobRole}
                         onChange={handleChange}
                         className="border rounded-md px-3 py-2 mt-2 w-full"
                         placeholder="Job Role"
